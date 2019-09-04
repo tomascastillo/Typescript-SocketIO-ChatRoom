@@ -5,4 +5,6 @@ export interface Message {
     from?: User;
     content?: any;
     action?: Action;
+    hora: any;
+    uuid:any;
 }

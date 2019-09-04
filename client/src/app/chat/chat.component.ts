@@ -1,25 +1,43 @@
-import { Component, OnInit, ViewChildren, ViewChild, AfterViewInit, QueryList, ElementRef } from '@angular/core';
-import { MatDialog, MatDialogRef, MatList, MatListItem } from '@angular/material';
+import {
+  Component,
+  OnInit,
+  ViewChildren,
+  ViewChild,
+  AfterViewInit,
+  QueryList,
+  ElementRef
+} from "@angular/core";
+import {
+  MatDialog,
+  MatDialogRef,
+  MatList,
+  MatListItem
+} from "@angular/material";
 
-import { Action } from './shared/model/action';
-import { Event } from './shared/model/event';
-import { Message } from './shared/model/message';
-import { User } from './shared/model/user';
-import { SocketService } from './shared/services/socket.service';
-import { DialogUserComponent } from './dialog-user/dialog-user.component';
-import { DialogUserType } from './dialog-user/dialog-user-type';
+import { Action } from "./shared/model/action";
+import { Event } from "./shared/model/event";
+import { Message } from "./shared/model/message";
+import { User } from "./shared/model/user";
+import { SocketService } from "./shared/services/socket.service";
+import { DialogUserComponent } from "./dialog-user/dialog-user.component";
+import { DialogUserType } from "./dialog-user/dialog-user-type";
+import { HttpModule, RequestOptions } from "@angular/http";
+import { Http } from "@angular/http";
+import { HttpHeaders, HttpClient } from "@angular/common/http";
 
-
-const AVATAR_URL = 'https://api.adorable.io/avatars/285';
+const AVATAR_URL = "../../assets";
 
 @Component({
-  selector: 'tcc-chat',
-  templateUrl: './chat.component.html',
-  styleUrls: ['./chat.component.css']
+  selector: "tcc-chat",
+  templateUrl: "./chat.component.html",
+  styleUrls: ["./chat.component.css"]
 })
 export class ChatComponent implements OnInit, AfterViewInit {
+  vecMensajes: Message[] = [];
+  instancia: string;
   action = Action;
   user: User;
+  orquestador: User;
   messages: Message[] = [];
   messageContent: string;
   ioConnection: any;
@@ -27,7 +45,7 @@ export class ChatComponent implements OnInit, AfterViewInit {
   defaultDialogUserParams: any = {
     disableClose: true,
     data: {
-      title: 'Welcome',
+      title: "Bienvenido!",
       dialogType: DialogUserType.NEW
     }
   };
@@ -36,12 +54,28 @@ export class ChatComponent implements OnInit, AfterViewInit {
   @ViewChild(MatList, { read: ElementRef }) matList: ElementRef;
 
   // getting a reference to the items/messages within the list
-  @ViewChildren(MatListItem, { read: ElementRef }) matListItems: QueryList<MatListItem>;
+  @ViewChildren(MatListItem, { read: ElementRef }) matListItems: QueryList<
+    MatListItem
+  >;
 
-  constructor(private socketService: SocketService,
-    public dialog: MatDialog) { }
+  constructor(
+    private socketService: SocketService,
+    public dialog: MatDialog,
+    private http: Http,
+    private httpclient: HttpClient
+  ) {}
 
   ngOnInit(): void {
+    this.http.get("http://localhost:54549/api/NewInstance").subscribe(data => {
+      data.json();
+      console.log(data);
+      console.log(data.json().id);
+      this.instancia = data.json().id;
+      //this.childTwo.dataShared=id;
+
+      // the console.log(...) line prevents your code from working
+      // either remove it or add the line below (return ...)
+    });
     this.initModel();
     // Using timeout due to https://github.com/angular/angular/issues/14748
     setTimeout(() => {
@@ -61,47 +95,51 @@ export class ChatComponent implements OnInit, AfterViewInit {
   private scrollToBottom(): void {
     try {
       this.matList.nativeElement.scrollTop = this.matList.nativeElement.scrollHeight;
-    } catch (err) {
-    }
+    } catch (err) {}
   }
 
   private initModel(): void {
     const randomId = this.getRandomId();
     this.user = {
-      id: randomId,
-      avatar: `${AVATAR_URL}/${randomId}.png`
+      id: 1,
+      avatar: `${AVATAR_URL}/user.png`
+    };
+    this.orquestador = {
+      id: 2,
+      name: "Asistente virtual de Whirlpool",
+      avatar: `${AVATAR_URL}/whirlpool.png`
     };
   }
 
   private initIoConnection(): void {
     this.socketService.initSocket();
 
-    this.ioConnection = this.socketService.onMessage()
+    this.ioConnection = this.socketService
+      .onMessage()
       .subscribe((message: Message) => {
         this.messages.push(message);
       });
 
+    this.socketService.onEvent(Event.CONNECT).subscribe(() => {
+      console.log("connected");
+    });
 
-    this.socketService.onEvent(Event.CONNECT)
-      .subscribe(() => {
-        console.log('connected');
-      });
+    this.socketService.register();
 
-    this.socketService.onEvent(Event.DISCONNECT)
-      .subscribe(() => {
-        console.log('disconnected');
-      });
+    this.socketService.onEvent(Event.DISCONNECT).subscribe(() => {
+      console.log("disconnected");
+    });
   }
 
   private getRandomId(): number {
-    return Math.floor(Math.random() * (1000000)) + 1;
+    return Math.floor(Math.random() * 1000000) + 1;
   }
 
   public onClickUserInfo() {
     this.openUserPopup({
       data: {
         username: this.user.name,
-        title: 'Edit Details',
+        title: "Edit Details",
         dialogType: DialogUserType.EDIT
       }
     });
@@ -128,11 +166,114 @@ export class ChatComponent implements OnInit, AfterViewInit {
     if (!message) {
       return;
     }
-
+    console.log(      localStorage.getItem("socketUUID")
+    );
     this.socketService.send({
       from: this.user,
-      content: message
+      content: message,
+      hora: Date.now().toString(),
+      uuid: localStorage.getItem("socketUUID")
     });
+    this.vecMensajes.push({
+      from: this.user,
+      content: message,
+      hora: Date.now().toString(),
+      uuid: localStorage.getItem("socketUUID")
+
+    });
+    console.log(this.vecMensajes);
+
+    let datosUsuario = {
+      Email: "tcastillo@biactiva.com",
+      FirstName: "Tomas",
+      LastName: "Castillo"
+    };
+    let rta;
+    if (message.includes("quiero hablar con un agente")) {
+      let url = "http://localhost:54549/api/ConnectChat/" + this.instancia;
+      this.http.post(url, datosUsuario).subscribe(data => {
+        rta = "Se ha conectado con un agente de soporte";
+        //ACA SE LE ENVIA TODA LA INFO DEL CHAT AL AGENTE DE RN********
+        let cadenasMensajes = " ";
+        for (var i = 0; i < this.vecMensajes.length; i++) {
+          cadenasMensajes = cadenasMensajes
+            .concat(" From: ")
+            .concat(this.vecMensajes[i].from.name.toString())
+            .concat(" Mensaje: ")
+            .concat(this.vecMensajes[i].content.toString())
+            .concat(" Hora: ")
+            .concat(this.vecMensajes[i].hora.toString());
+        }
+        console.log(
+          cadenasMensajes
+        ); /**
+        let url = "http://localhost:54549/api/Message/" + this.instancia;
+        let req = {
+          Created: Date.now(),
+          Body: {
+            Text: cadenasMensajes
+          }
+        };
+        let headers = new HttpHeaders().set("Content-Type", "application/json");
+        this.httpclient.post(url, req, { headers: headers }).subscribe(data => {
+          let answer = data[0].Body.Text;
+          console.log(data[0].Body.Text);
+          if (
+            data[0].Body.Text ==
+            "¿Puede expresarse con otras palabras? No he entendido."
+          ) {
+            answer = data[1].Body.Text;
+          }
+          this.socketService.send({
+            from: this.orquestador,
+            content: answer,
+            hora: Date.now()
+          });
+          this.vecMensajes.push({
+            from: this.user,
+            content: answer,
+            hora: Date.now()
+          });
+          console.log(this.vecMensajes);
+        });*/
+      });
+    } else {
+      rta = null;
+
+      let url = "http://localhost:54549/api/Message/" + this.instancia;
+      let req = {
+        Created: Date.now().toString(),
+        Body: {
+          Text: message
+        }
+      };
+      let headers = new HttpHeaders().set("Content-Type", "application/json");
+      this.httpclient.post(url, req, { headers: headers }).subscribe(data => {
+        let answer = data[0].Body.Text;
+        console.log(data[0].Body.Text);
+        if (
+          data[0].Body.Text ==
+          "¿Puede expresarse con otras palabras? No he entendido."
+        ) {
+          answer = data[1].Body.Text;
+        }
+        this.socketService.send({
+          from: this.orquestador,
+          content: answer,
+          hora: Date.now().toString(),
+          uuid: localStorage.getItem("socketUUID")
+
+        });
+        this.vecMensajes.push({
+          from: this.user,
+          content: answer,
+          hora: Date.now().toString(),
+          uuid: localStorage.getItem("socketUUID")
+
+        });
+        console.log(this.vecMensajes);
+      });
+    }
     this.messageContent = null;
   }
 
@@ -142,18 +283,32 @@ export class ChatComponent implements OnInit, AfterViewInit {
     if (action === Action.JOINED) {
       message = {
         from: this.user,
-        action: action
-      }
+        action: action,
+        hora: Date.now().toString(),
+        uuid: localStorage.getItem("socketUUID")
+
+      };
     } else if (action === Action.RENAME) {
       message = {
         action: action,
         content: {
           username: this.user.name,
           previousUsername: params.previousUsername
-        }
+        },
+        hora: Date.now().toString(),
+        uuid: localStorage.getItem("socketUUID")
+
       };
     }
 
     this.socketService.send(message);
+    this.vecMensajes.push({
+      from: this.user,
+      content: message,
+      hora: Date.now().toString(),
+      uuid: localStorage.getItem("socketUUID")
+
+    });
+    console.log(this.vecMensajes);
   }
 }
