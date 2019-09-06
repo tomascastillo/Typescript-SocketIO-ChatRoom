@@ -10,10 +10,6 @@ export class ChatServer {
     private server: Server;
     private io: SocketIO.Server;
     private port: string | number;
-    private clientToRooms: Array<String>;
-    private uuidv4 = require('uuid/v4');
-    private connectedUsers = new Array();
-
 
     constructor() {
         this.createApp();
@@ -38,41 +34,23 @@ export class ChatServer {
     private sockets(): void {
         this.io = socketIo(this.server);
     }
-    private newId(): number{
-        return this.connectedUsers.length+1;
-    }
+
     private listen(): void {
         this.server.listen(this.port, () => {
             console.log('Running server on port %s', this.port);
         });
-        this.io.on('register', function(clientUuid){ // a client requests registration
-            var id = clientUuid == null? this.newId() : clientUuid; // create an id if client doesn't already have one
-            var nsp;
-            var ns = "/" + id;
-      
-            this.io.join(id);
-            var nsp = this.app.io.of(ns); // create a room using this id that is only for this client
-            this.clientToRooms[ns] = nsp; // save it to a dictionary for future use
-            console.log('id: %d'+id);
-            // set up what to do on connection
-            nsp.on('connection', function(nsSocket){
-                console.log('Connected client on port %s.', this.port);
-      
-                this.connectedUsers[id]=nsSocket;
-              nsSocket.on('message', (m: Message) => {
-                console.log('id: %d'+id);
 
+        this.io.on('connect', (socket: any) => {
+            console.log('Connected client on port %s.', this.port);
+            socket.on('message', (m: Message) => {
                 console.log('[server](message): %s', JSON.stringify(m));
-                m.uuid=id;
-                this.connectedUsers[id].emit('message', m);
-                //this.io.emit('message', m);
+                this.io.emit('message', m);
             });
-            nsSocket.on('disconnect', () => {
+
+            socket.on('disconnect', () => {
                 console.log('Client disconnected');
             });
         });
-    });
-       
     }
 
     public getApp(): express.Application {
